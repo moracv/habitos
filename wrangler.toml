@@ -1,8 +1,0 @@
-# Este archivo es opcional para Cloudflare Pages
-# Solo se necesita _headers y _redirects en la raíz
-# Este archivo se puede eliminar si causa problemas
-
-name = "habitos-atomicos"
-main = "index.html"
-compatibility_date = "2024-01-01"
-type = "javascript"
