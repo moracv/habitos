@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="description" content="Checklist de hábitos diarios basado en Hábitos Atómicos">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="color-scheme" content="light dark">
+
+    <!-- Apple / iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hábitos">
+
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Hábitos Atómicos">
+
+    <!-- Manifest y Service Worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
+
+    <title>Hábitos Atómicos - Checklist Diario</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%236366f1' width='192' height='192'/><text x='50%' y='50%' font-size='100' fill='white' text-anchor='middle' dominant-baseline='central'>✓</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%236366f1' width='180' height='180'/><text x='50%' y='50%' font-size='90' fill='white' text-anchor='middle' dominant-baseline='central'>✓</text></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding-bottom: 20px;
+        }
+
+        .habit-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .habit-card:active {
+            transform: scale(0.98);
+        }
+
+        .habit-card.completed {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .habit-card.completed .habit-title,
+        .habit-card.completed .habit-support {
+            text-decoration: line-through;
+            opacity: 0.8;
+        }
+
+        .checkbox {
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border: 2px solid currentColor;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .checkbox:checked {
+            background-color: currentColor;
+        }
+
+        .checkbox:checked::after {
+            content: '✓';
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .day-button {
+            transition: all 0.2s ease;
+        }
+
+        .day-button.active {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+        }
+
+        .block-title {
+            position: relative;
+            display: inline-block;
+            padding-bottom: 8px;
+        }
+
+        .block-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, currentColor 0%, transparent 100%);
+            border-radius: 2px;
+        }
+
+        .toast {
+            animation: slideUp 0.3s ease forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-out {
+            animation: fadeOut 0.3s ease forwards;
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-indigo-600 via-purple-600 to-pink-500">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-black bg-opacity-30 backdrop-blur-md sticky top-0 z-20 border-b border-white border-opacity-10">
+            <div class="max-w-4xl mx-auto px-4 py-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <span class="text-3xl">⚛️</span>
+                        Hábitos Atómicos
+                    </h1>
+                    <button id="installBtn" class="hidden bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-4 py-2 rounded-lg transition">
+                        📥 Instalar
+                    </button>
+                </div>
+
+                <!-- Selector de días -->
+                <div class="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+                    <button class="day-button active flex-shrink-0 px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold transition day-0" data-day="0">
+                        Hoy
+                    </button>
+                    <button class="day-button flex-shrink-0 px-4 py-2 rounded-full bg-white bg-opacity-20 text-white transition day-1" data-day="1">
+                        Ayer
+                    </button>
+                    <div class="flex-shrink-0 px-2 flex items-center text-white opacity-50">•••</div>
+                    <button class="day-button flex-shrink-0 px-4 py-2 rounded-full bg-white bg-opacity-20 text-white transition day-6" data-day="6">
+                        Hace 6d
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-4xl mx-auto px-4 py-6">
+            <!-- Progress Section -->
+            <div class="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl p-6 mb-6 border border-white border-opacity-20">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-white font-semibold text-lg">Progreso del día</span>
+                    <span id="progressText" class="text-2xl font-bold text-yellow-300">0/21</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <p id="progressMessage" class="text-white text-opacity-70 text-sm mt-3">Comienza tu día con el primer hábito 🚀</p>
+            </div>
+
+            <!-- Mañana Block -->
+            <section class="mb-8">
+                <h2 class="text-white text-xl font-bold mb-4 block-title">🌅 Mañana</h2>
+                <div id="blocMañana" class="grid gap-3">
+                    <!-- Cards generadas por JS -->
+                </div>
+            </section>
+
+            <!-- Actividad Block -->
+            <section class="mb-8">
+                <h2 class="text-white text-xl font-bold mb-4 block-title">💪 Actividad</h2>
+                <div id="blocActividad" class="grid gap-3">
+                    <!-- Cards generadas por JS -->
+                </div>
+            </section>
+
+            <!-- Rutina Block -->
+            <section class="mb-8">
+                <h2 class="text-white text-xl font-bold mb-4 block-title">🌙 Rutina</h2>
+                <div id="blocRutina" class="grid gap-3">
+                    <!-- Cards generadas por JS -->
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 mt-8">
+                <button id="resetBtn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition">
+                    🔄 Reiniciar día
+                </button>
+                <button id="clearStorageBtn" class="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition">
+                    🗑️ Borrar todo
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="fixed bottom-4 left-4 right-4 flex flex-col gap-2"></div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js').catch(err => console.log('SW registration failed:', err));
+        }
+
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                installBtn.classList.add('hidden');
+            }
+        });
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>

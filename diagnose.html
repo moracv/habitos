@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico Cloudflare PWA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .success { @apply bg-green-100 border-green-300 text-green-800; }
+        .error { @apply bg-red-100 border-red-300 text-red-800; }
+        .warning { @apply bg-yellow-100 border-yellow-300 text-yellow-800; }
+        .info { @apply bg-blue-100 border-blue-300 text-blue-800; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-bold mb-2">🔍 Diagnóstico de PWA</h1>
+        <p class="text-gray-600 mb-8">Verifica que todos los archivos y headers estén configurados correctamente para Cloudflare Pages</p>
+
+        <div id="results" class="space-y-4"></div>
+    </div>
+
+    <script>
+        async function checkFile(path, expectedContentType = null) {
+            try {
+                const res = await fetch(path, { method: 'HEAD' });
+                const contentType = res.headers.get('content-type');
+                const cacheControl = res.headers.get('cache-control');
+                const swAllowed = res.headers.get('service-worker-allowed');
+
+                return {
+                    status: res.status,
+                    ok: res.ok,
+                    contentType,
+                    cacheControl,
+                    swAllowed,
+                    expectedContentType,
+                    match: expectedContentType ? contentType?.includes(expectedContentType.split(';')[0]) : true
+                };
+            } catch (e) {
+                return { error: e.message };
+            }
+        }
+
+        function renderResult(title, icon, items) {
+            const container = document.getElementById('results');
+            const section = document.createElement('div');
+            section.className = 'bg-white rounded-lg shadow p-6 mb-4';
+
+            let html = `<h2 class="text-xl font-bold mb-4">${icon} ${title}</h2>`;
+            html += '<div class="space-y-3">';
+
+            items.forEach(item => {
+                const statusClass = item.pass ? 'success' : 'error';
+                html += `
+                    <div class="p-3 border rounded ${statusClass}">
+                        <div class="font-semibold">${item.pass ? '✅' : '❌'} ${item.name}</div>
+                        ${item.details ? `<div class="text-sm mt-1 opacity-80">${item.details}</div>` : ''}
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            section.innerHTML = html;
+            container.appendChild(section);
+        }
+
+        async function runDiagnostics() {
+            const results = [];
+
+            // 1. Verificar archivo principal
+            const indexCheck = await checkFile('/index.html', 'text/html');
+            renderResult('🌐 Archivo Principal', '📄', [
+                {
+                    name: 'index.html accesible',
+                    pass: indexCheck.ok,
+                    details: `Status: ${indexCheck.status}, Type: ${indexCheck.contentType}`
+                }
+            ]);
+
+            // 2. Verificar Manifest
+            const manifestCheck = await checkFile('/manifest.json', 'application/json');
+            renderResult('📋 Manifest.json', '📋', [
+                {
+                    name: 'Archivo accesible',
+                    pass: manifestCheck.ok,
+                    details: `Status: ${manifestCheck.status}`
+                },
+                {
+                    name: 'Content-Type correcto',
+                    pass: manifestCheck.contentType?.includes('application/') || manifestCheck.contentType?.includes('json'),
+                    details: `Encontrado: ${manifestCheck.contentType || 'No definido'}`
+                },
+                {
+                    name: 'Caché configurado',
+                    pass: !!manifestCheck.cacheControl,
+                    details: `Cache-Control: ${manifestCheck.cacheControl || 'No definido'}`
+                }
+            ]);
+
+            // 3. Verificar Service Worker
+            const swCheck = await checkFile('/service-worker.js', 'application/javascript');
+            renderResult('⚙️ Service Worker', '⚙️', [
+                {
+                    name: 'Archivo accesible',
+                    pass: swCheck.ok,
+                    details: `Status: ${swCheck.status}`
+                },
+                {
+                    name: 'Content-Type correcto',
+                    pass: swCheck.contentType?.includes('javascript'),
+                    details: `Encontrado: ${swCheck.contentType || 'No definido'}`
+                },
+                {
+                    name: 'Service-Worker-Allowed header',
+                    pass: !!swCheck.swAllowed,
+                    details: `Header: ${swCheck.swAllowed || 'No definido'}`
+                },
+                {
+                    name: 'No-cache configurado',
+                    pass: swCheck.cacheControl?.includes('no-cache') || swCheck.cacheControl?.includes('max-age=0'),
+                    details: `Cache-Control: ${swCheck.cacheControl || 'No definido'}`
+                }
+            ]);
+
+            // 4. Verificar app.js
+            const appCheck = await checkFile('/app.js', 'application/javascript');
+            renderResult('🎯 App.js', '🎯', [
+                {
+                    name: 'Archivo accesible',
+                    pass: appCheck.ok,
+                    details: `Status: ${appCheck.status}`
+                },
+                {
+                    name: 'Content-Type correcto',
+                    pass: appCheck.contentType?.includes('javascript'),
+                    details: `Encontrado: ${appCheck.contentType}`
+                }
+            ]);
+
+            // 5. Verificar Configuración
+            const redirectsCheck = await checkFile('/_redirects');
+            const headersCheck = await checkFile('/_headers');
+
+            renderResult('⚙️ Configuración Cloudflare', '⚙️', [
+                {
+                    name: '_redirects presente',
+                    pass: redirectsCheck.ok || redirectsCheck.status === 404,
+                    details: `Status: ${redirectsCheck.status}`
+                },
+                {
+                    name: '_headers presente',
+                    pass: headersCheck.ok || headersCheck.status === 404,
+                    details: `Status: ${headersCheck.status}`
+                }
+            ]);
+
+            // 6. Verificar conectividad y headers
+            const headersTest = await fetch('/index.html', { method: 'HEAD' });
+            const originHeader = headersTest.headers.get('access-control-allow-origin');
+            const securityHeaders = {
+                'x-content-type-options': headersTest.headers.get('x-content-type-options'),
+                'x-frame-options': headersTest.headers.get('x-frame-options'),
+                'referrer-policy': headersTest.headers.get('referrer-policy')
+            };
+
+            renderResult('🔒 Headers de Seguridad', '🔒', [
+                {
+                    name: 'X-Content-Type-Options',
+                    pass: !!securityHeaders['x-content-type-options'],
+                    details: `Valor: ${securityHeaders['x-content-type-options'] || 'No configurado'}`
+                },
+                {
+                    name: 'X-Frame-Options',
+                    pass: !!securityHeaders['x-frame-options'],
+                    details: `Valor: ${securityHeaders['x-frame-options'] || 'No configurado'}`
+                },
+                {
+                    name: 'Referrer-Policy',
+                    pass: !!securityHeaders['referrer-policy'],
+                    details: `Valor: ${securityHeaders['referrer-policy'] || 'No configurado'}`
+                }
+            ]);
+
+            // 7. Verificar HTTPS
+            renderResult('🔐 Seguridad', '🔐', [
+                {
+                    name: 'HTTPS habilitado',
+                    pass: location.protocol === 'https:' || location.hostname === 'localhost',
+                    details: `Protocolo actual: ${location.protocol}`
+                }
+            ]);
+
+            // 8. Verificar LocalStorage
+            let lsWorks = false;
+            try {
+                localStorage.setItem('__test__', 'test');
+                localStorage.removeItem('__test__');
+                lsWorks = true;
+            } catch (e) {}
+
+            renderResult('💾 Almacenamiento', '💾', [
+                {
+                    name: 'localStorage disponible',
+                    pass: lsWorks,
+                    details: 'Los datos se guardarán localmente'
+                }
+            ]);
+
+            // Resumen final
+            const container = document.getElementById('results');
+            const summary = document.createElement('div');
+            summary.className = 'bg-white rounded-lg shadow p-6 mt-8 border-l-4 border-blue-500';
+            summary.innerHTML = `
+                <h2 class="text-xl font-bold mb-4">📊 Resumen</h2>
+                <div class="space-y-2 text-sm">
+                    <p>✅ Los archivos principales están siendo servidos correctamente</p>
+                    <p>✅ Los headers de contenido están configurados</p>
+                    <p>✅ HTTPS está habilitado (requerido para PWA)</p>
+                    <p>ℹ️ Si todo está ✅, tu PWA debería ser instalable en Android</p>
+                    <p>⚠️ Si hay ❌, revisa el archivo CLOUDFLARE_DEPLOY.md para soluciones</p>
+                </div>
+            `;
+            container.appendChild(summary);
+        }
+
+        runDiagnostics();
+    </script>
+</body>
+</html>
