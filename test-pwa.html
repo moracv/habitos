@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000">
+    <link rel="manifest" href="test-manifest.json">
+    <title>Test PWA</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #000; color: #fff; }
+        h1 { color: #0f0; }
+        button { padding: 10px; font-size: 16px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>✓ TEST PWA</h1>
+    <p>Si ves este texto, la PWA está funcionando</p>
+    <button onclick="testSW()">Test Service Worker</button>
+    <p id="status"></p>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('test-sw.js')
+                .then(reg => {
+                    document.getElementById('status').textContent = '✓ Service Worker registrado';
+                    console.log('SW registrado');
+                })
+                .catch(err => {
+                    document.getElementById('status').textContent = '✗ Error SW: ' + err;
+                    console.error('SW error:', err);
+                });
+        }
+
+        function testSW() {
+            fetch('test-pwa.html')
+                .then(r => document.getElementById('status').textContent = '✓ Fetch funciona')
+                .catch(e => document.getElementById('status').textContent = '✗ Fetch falla: ' + e);
+        }
+    </script>
+</body>
+</html>
